@@ -6,8 +6,9 @@ export class Game2 {
     private _scene: Scene;
 
     private _camera: Camera;
-    private _light: Light;
-    private _planet: AbstractMesh;
+    private _sun: Light;
+    private _laser: AbstractMesh;
+    private _laserLight: PointLight;
 
     public readonly onUpdate: Observable<boolean> = new Observable<boolean>();
 
@@ -20,8 +21,9 @@ export class Game2 {
     createSceneAsync() : Promise<void> {
         return new Promise<void>((res,rej)=> {
             SceneLoader.Load("dist/assets/", "space2.babylon", this._engine, 
-                scene => {
+                async scene => {
                     this._scene = scene;
+                    await this.initAsync;
                     this._loadAssets(scene);
                     res()
                 }, 
@@ -31,25 +33,55 @@ export class Game2 {
     }
 
     private _loadAssets(scene: Scene){
-        this._planet = this._scene.getMeshByName("Plane");
+        
         this._camera = this._scene.getCameraByName("Camera");
         this._camera.attachControl(this._canvas);
-        this._camera.maxZ = 500;       
+        this._camera.maxZ = 500; 
 
-        this._light = this._scene.getLightByName("Hemi");
+        this._laser = this._scene.getMeshByName("laser");
+        this._laser.position = this._camera.position;
+
+        this._sun = this._scene.getLightByName("Hemi");
+
+        this._laserLight = new PointLight("Point", this._camera.position, this._scene);
+        this._laserLight.diffuse = new Color3(1, 0, 0);
+        this._laserLight.specular = new Color3(1, 1, 1);
+        this._laserLight.intensity = 5;
+        this._laserLight.range = 30;
+
+        this._laserLight.setEnabled(false);
+
         const gamepad = (<Xbox360Pad>(<FreeCameraGamepadInput>this._camera.inputs.attached["gamepad"]).gamepad);
-        gamepad.onbuttonup(button => {
+        
+        gamepad.onbuttonup(async button => {
+            console.log("down")
             switch(button){
-                case 0: return this.shootLight();
+                case 0: {
+                    this._laserLight.setEnabled(false);
+                }
+            }
+
+        });
+        gamepad.onbuttondown(async button => {
+            switch(button){
+                case 0: {
+                    this._laserLight.setEnabled(true);
+                    await this.wait(100);
+                    this._laserLight.setEnabled(false);
+                }
             }
 
         });
     }
 
-    animate() : void {
+      
 
+    animate() : void {
+        //Vector3.RotationFromAxis();
         // run the render loop
+
         this._engine.runRenderLoop(() => {
+            
             this.onUpdate.notifyObservers(true);
             //this._planet.rotation.y += 0.01;
             this._scene.render();
@@ -61,28 +93,19 @@ export class Game2 {
         });
     }
 
-    shootLight() {
-        const origin = this._camera.position.clone();
-        const light = new PointLight("Point", origin.clone(), this._scene);
-        light.diffuse = new Color3(1, 0, 0);
-        light.specular = new Color3(1, 1, 1);
-        light.intensity = 5;
-        light.range = 30;
+    initAsync(){
+        return new Promise<void>((res,rej) => this._scene.onReadyObservable.add(() => res()));
+    }
 
+    async shootLight() {
+        
         const ray = this._camera.getForwardRay();
-        const animator = () => {
-            if(light.position.subtract(origin).length() > 200){
-                this._scene.removeLight(light);
-                this.onUpdate.removeCallback(animator);
-                console.log("light destroyed")
-            }
-
-            light.position.addInPlace(ray.direction); 
-
-        };
-
-        this.onUpdate.add(animator);
 
     }
+
+    private wait(ms: number){
+        return new Promise<void>((res)=> setTimeout(() => res(), ms));
+    }
+
 }
 
