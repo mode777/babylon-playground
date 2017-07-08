@@ -1,4 +1,4 @@
-import { Engine, Scene, FreeCamera, Light, Vector3, HemisphericLight, MeshBuilder, SceneLoader, Mesh, AbstractMesh, Camera } from "babylonjs";
+import { Engine, Scene, FreeCamera, Light, Vector3, HemisphericLight, MeshBuilder, SceneLoader, Mesh, AbstractMesh, Camera, PointLight, Color3, ActionManager, InterpolateValueAction, Observable, FreeCameraGamepadInput, Xbox360Pad } from "babylonjs";
 
 export class Game2 {
     private _canvas: HTMLCanvasElement;
@@ -8,6 +8,8 @@ export class Game2 {
     private _camera: Camera;
     private _light: Light;
     private _planet: AbstractMesh;
+
+    public readonly onUpdate: Observable<boolean> = new Observable<boolean>();
 
     constructor(canvasElement : string) {
         // Create canvas and engine
@@ -32,16 +34,23 @@ export class Game2 {
         this._planet = this._scene.getMeshByName("Plane");
         this._camera = this._scene.getCameraByName("Camera");
         this._camera.attachControl(this._canvas);
-        console.log(this._camera)
+        this._camera.maxZ = 500;       
+
         this._light = this._scene.getLightByName("Hemi");
-        this._scene.materials.forEach(x => {
-            console.log(x);
-        })
+        const gamepad = (<Xbox360Pad>(<FreeCameraGamepadInput>this._camera.inputs.attached["gamepad"]).gamepad);
+        gamepad.onbuttonup(button => {
+            switch(button){
+                case 0: return this.shootLight();
+            }
+
+        });
     }
 
     animate() : void {
+
         // run the render loop
         this._engine.runRenderLoop(() => {
+            this.onUpdate.notifyObservers(true);
             //this._planet.rotation.y += 0.01;
             this._scene.render();
         });
@@ -50,6 +59,30 @@ export class Game2 {
         window.addEventListener('resize', () => {
             this._engine.resize();
         });
+    }
+
+    shootLight() {
+        const origin = this._camera.position.clone();
+        const light = new PointLight("Point", origin.clone(), this._scene);
+        light.diffuse = new Color3(1, 0, 0);
+        light.specular = new Color3(1, 1, 1);
+        light.intensity = 5;
+        light.range = 30;
+
+        const ray = this._camera.getForwardRay();
+        const animator = () => {
+            if(light.position.subtract(origin).length() > 200){
+                this._scene.removeLight(light);
+                this.onUpdate.removeCallback(animator);
+                console.log("light destroyed")
+            }
+
+            light.position.addInPlace(ray.direction); 
+
+        };
+
+        this.onUpdate.add(animator);
+
     }
 }
 
