@@ -1,14 +1,20 @@
-import { Engine, Scene, FreeCamera, Light, Vector3, HemisphericLight, MeshBuilder, SceneLoader, Mesh, AbstractMesh, Camera, PointLight, Color3, ActionManager, InterpolateValueAction, Observable, FreeCameraGamepadInput, Xbox360Pad } from "babylonjs";
+import { Engine, Scene, FreeCamera, Light, Vector3, HemisphericLight, MeshBuilder, SceneLoader, Mesh, Camera, PointLight, Color3, ActionManager, InterpolateValueAction, Observable, FreeCameraGamepadInput, Xbox360Pad, FollowCamera, TargetCamera, ArcFollowCamera } from "babylonjs";
+import { delay } from "./timing";
+import { IUpdateProvider } from "./IUpdateProvider";
+import { SpaceShip } from "./SpaceShip";
 
-export class Game2 {
+const ALPHA_ZERO = 0.001;
+
+export class Game2 implements IUpdateProvider {
     private _canvas: HTMLCanvasElement;
     private _engine: Engine;
     private _scene: Scene;
 
-    private _camera: Camera;
+    private _camera: ArcFollowCamera;
     private _sun: Light;
-    private _laser: AbstractMesh;
+    //private _laser: AbstractMesh;
     private _laserLight: PointLight;
+    private _ship: SpaceShip;
 
     public readonly onUpdate: Observable<boolean> = new Observable<boolean>();
 
@@ -34,13 +40,19 @@ export class Game2 {
 
     private _loadAssets(scene: Scene){
         
-        this._camera = this._scene.getCameraByName("Camera");
-        this._camera.attachControl(this._canvas);
+        //this._laser = this._scene.getMeshByName("laser");
+
+        const sceneCam = this._scene.getCameraByName("Camera");
+        const sceneShip = this._scene.getMeshByName("ship");
+        this._ship = new SpaceShip("SpaceShip", scene, sceneShip);
+        this._ship.thrust = 0.1;
+        this._ship.setTargetYaw(2);
+        this._ship.setTargetPitch(0.5);
+
+        this._camera = new ArcFollowCamera("Camera2", Math.PI / 2, 0, 30, this._ship, scene);
+        this._scene.setActiveCameraByName("Camera2");
         this._camera.maxZ = 500; 
-
-        this._laser = this._scene.getMeshByName("laser");
-        this._laser.position = this._camera.position;
-
+       
         this._sun = this._scene.getLightByName("Hemi");
 
         this._laserLight = new PointLight("Point", this._camera.position, this._scene);
@@ -49,39 +61,13 @@ export class Game2 {
         this._laserLight.intensity = 5;
         this._laserLight.range = 30;
 
-        this._laserLight.setEnabled(false);
+        this._laserLight.setEnabled(false);      
+    }    
 
-        const gamepad = (<Xbox360Pad>(<FreeCameraGamepadInput>this._camera.inputs.attached["gamepad"]).gamepad);
-        
-        gamepad.onbuttonup(async button => {
-            console.log("down")
-            switch(button){
-                case 0: {
-                    this._laserLight.setEnabled(false);
-                }
-            }
-
-        });
-        gamepad.onbuttondown(async button => {
-            switch(button){
-                case 0: {
-                    this._laserLight.setEnabled(true);
-                    await this.wait(100);
-                    this._laserLight.setEnabled(false);
-                }
-            }
-
-        });
-    }
-
-      
-
-    animate() : void {
-        //Vector3.RotationFromAxis();
-        // run the render loop
+    async animate() {
 
         this._engine.runRenderLoop(() => {
-            
+            this._camera.alpha = -this._ship.rotation.y + Math.PI/2;
             this.onUpdate.notifyObservers(true);
             //this._planet.rotation.y += 0.01;
             this._scene.render();
@@ -91,6 +77,16 @@ export class Game2 {
         window.addEventListener('resize', () => {
             this._engine.resize();
         });
+
+        await delay(5000);
+        this._ship.setTargetYaw(-2);
+        await delay(10000);
+        this._ship.setTargetYaw(0);
+        this._ship.setTargetPitch(-0.5)
+        this._ship.thrust = 0.5;
+        await delay(5000);
+        this._ship.setTargetPitch(0.0)
+        this._ship.setTargetYaw(2);
     }
 
     initAsync(){
@@ -101,10 +97,6 @@ export class Game2 {
         
         const ray = this._camera.getForwardRay();
 
-    }
-
-    private wait(ms: number){
-        return new Promise<void>((res)=> setTimeout(() => res(), ms));
     }
 
 }
