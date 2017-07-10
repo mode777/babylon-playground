@@ -1,28 +1,22 @@
 import { AbstractMesh, Node, Scene, Vector3, ArcFollowCamera } from "babylonjs";
-import { IUpdateProvider } from "./IUpdateProvider";
-import { IInputProvider } from "./IInputProvider";
 import { MeshContainer } from "./MeshContainer";
 import { clamp, step } from "./math";
+import { IEntityController } from "./IEntityController";
+import { SpaceShipState } from "./SpaceshipControllers";
+import { EntityControl } from "./EntityControl";
 
 export class SpaceShip extends MeshContainer {
-    private _thrust: number = 0;
     
-    private _yawTarget = 0;
-    private _yawCurrent = 0;
-    private _yawAcc = 0.0005;
-    private _yawRange = [-0.005, 0.005]
+    private _thrust = new EntityControl(0, 0.01, [0,0.5]);
+    private _yaw = new EntityControl(0, 0.001, [-0.02, 0.02]);
+    private _pitch = new EntityControl(0, 0.03, [-0.5,0.5]);
 
     private _roll = 0;
     private _maxRoll = 0.5;
 
-    private _pitchTarget = 0;
-    private _pitchCurrent = 0;
-    private _pitchAcc = 0.01;
-    private _pitchRange = [-1, 1]
-
     private _updateHandler = () => this._update();
     
-    constructor(name: string, scene: Scene, mesh: AbstractMesh){
+    constructor(name: string, scene: Scene, mesh: AbstractMesh, private _controller: IEntityController<SpaceShipState>){
         super(name, scene, mesh);
 
         this.getScene().onBeforeRenderObservable.add(this._updateHandler);
@@ -34,40 +28,53 @@ export class SpaceShip extends MeshContainer {
     }
 
     protected _update() {
+        // process inputs
+        const inputs = this._controller.getInputs();
+        this._thrust.setTarget(inputs.thrust * this._thrust.max);
+        this._yaw.setTarget(inputs.yaw > 0 
+            ? inputs.yaw * this._yaw.max
+            : inputs.yaw * -this._yaw.min);
+        this._pitch.setTarget(inputs.pitch > 0 
+            ? inputs.pitch * this._pitch.max
+            : inputs.pitch * -this._pitch.min);
+        
+
         // update specs
-        this._yawCurrent = step(this._yawCurrent, this._yawTarget, this._yawAcc);
-        this._pitchCurrent = step(this._pitchCurrent, this._pitchTarget, this._pitchAcc);
-        if(this._yawCurrent > 0){
-            this._roll = (this._yawCurrent / this._yawRange[1]) * this._maxRoll; 
+        this._yaw.update();
+        this._pitch.update();
+        this._thrust.update();
+        const yaw = this._yaw.value;
+        if(this._yaw.value > 0){
+            this._roll = (yaw / this._yaw.max) * this._maxRoll; 
         }
-        else if(this._yawCurrent < 0){
-            this._roll = -(this._yawCurrent / this._yawRange[0]) * this._maxRoll; 
+        else if(yaw < 0){
+            this._roll = -(yaw / this._yaw.min) * this._maxRoll; 
         }
         else {
             this._roll = 0;
         }
         
         // update transformations
-        this.rotation.y += this._yawCurrent;
-        this.rotation.x = this._pitchCurrent;
+        this.rotation.y += this._yaw.value;
+        this.rotation.x = this._pitch.value;
         this.rotation.z = this._roll;
-        this.movePOV(0,0,this._thrust);
+        this.movePOV(0,0,this._thrust.value);
     }
 
-    get thrust() { return this._thrust; }
-    get yaw() { return this._yawCurrent; }
-    get pitch() { return this._pitchCurrent; }
+    get thrust() { return this._thrust.value; }
+    get yaw() { return this._yaw.value; }
+    get pitch() { return this._pitch.value; }
 
-    set thrust(value: number) {
-        this._thrust = value;
+    setThrust(value: number) {
+        this._thrust.setTarget(value);
     }
 
-    setTargetYaw(value: number){
-        this._yawTarget = clamp(value, this._yawRange[0], this._yawRange[1]);
+    setYaw(value: number){
+        this._yaw.setTarget(value);
     }
 
-    setTargetPitch(value: number){
-        this._pitchTarget = clamp(value, this._pitchRange[0], this._pitchRange[1]);
+    setPitch(value: number){
+        this._pitch.setTarget(value);
     }
 
 }

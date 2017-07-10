@@ -1,11 +1,11 @@
 import { Engine, Scene, FreeCamera, Light, Vector3, HemisphericLight, MeshBuilder, SceneLoader, Mesh, Camera, PointLight, Color3, ActionManager, InterpolateValueAction, Observable, FreeCameraGamepadInput, Xbox360Pad, FollowCamera, TargetCamera, ArcFollowCamera } from "babylonjs";
 import { delay } from "./timing";
-import { IUpdateProvider } from "./IUpdateProvider";
 import { SpaceShip } from "./SpaceShip";
+import { GamepadSpaceShipController } from "./SpaceshipControllers";
 
 const ALPHA_ZERO = 0.001;
 
-export class Game2 implements IUpdateProvider {
+export class Game2 {
     private _canvas: HTMLCanvasElement;
     private _engine: Engine;
     private _scene: Scene;
@@ -44,10 +44,7 @@ export class Game2 implements IUpdateProvider {
 
         const sceneCam = this._scene.getCameraByName("Camera");
         const sceneShip = this._scene.getMeshByName("ship");
-        this._ship = new SpaceShip("SpaceShip", scene, sceneShip);
-        this._ship.thrust = 0.1;
-        this._ship.setTargetYaw(2);
-        this._ship.setTargetPitch(0.5);
+        this._ship = new SpaceShip("SpaceShip", scene, sceneShip, new GamepadSpaceShipController());
 
         this._camera = new ArcFollowCamera("Camera2", Math.PI / 2, 0, 30, this._ship, scene);
         this._scene.setActiveCameraByName("Camera2");
@@ -68,6 +65,7 @@ export class Game2 implements IUpdateProvider {
 
         this._engine.runRenderLoop(() => {
             this._camera.alpha = -this._ship.rotation.y + Math.PI/2;
+            //this._camera.beta = -this._ship.rotation.x
             this.onUpdate.notifyObservers(true);
             //this._planet.rotation.y += 0.01;
             this._scene.render();
@@ -77,16 +75,6 @@ export class Game2 implements IUpdateProvider {
         window.addEventListener('resize', () => {
             this._engine.resize();
         });
-
-        await delay(5000);
-        this._ship.setTargetYaw(-2);
-        await delay(10000);
-        this._ship.setTargetYaw(0);
-        this._ship.setTargetPitch(-0.5)
-        this._ship.thrust = 0.5;
-        await delay(5000);
-        this._ship.setTargetPitch(0.0)
-        this._ship.setTargetYaw(2);
     }
 
     initAsync(){
